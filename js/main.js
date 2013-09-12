@@ -46,12 +46,12 @@ function getUrlVars(url) {
 			//Hide & store the access token.
 			pushHistory(url.attr('source').split("#")[0]);
 			if (localStorage) {
-				try {localStorage["accessToken"] = api.accessToken;} 
+				try {localStorage["accessToken"] = api.accessToken;}
 				catch (e) {}
 			}
 		} else if (localStorage && localStorage["accessToken"]) {
 			//Retrieve the access token.
-			try {api.accessToken = localStorage["accessToken"];} 
+			try {api.accessToken = localStorage["accessToken"];}
 			catch (e) {}
 		}
 	}
@@ -63,7 +63,7 @@ function getUrlVars(url) {
 		}
 	}
 	return vars;
-};
+}
 
 function getSingle(userChannel) {
 	if (userChannel) {
@@ -98,7 +98,7 @@ function completeSingle(response) {
 	$('#yourPaste').html("<h3>Paste " + resp.id + "</h3>" + formatPaste(resp)).promise().done(function(){
 		$('textarea#repaste-text').css("height", $("code").css("height"));
 	});
-	$('pre code').each(function(i, e) {hljs.highlightBlock(e, '	')});
+	$('pre code').each(function(i, e) {hljs.highlightBlock(e, '	');});
 
 	//Scroll to top.
 	$('html, body').animate({scrollTop: '0px'}, 150);
@@ -141,7 +141,7 @@ function completeMultiple(response) {
 	if (response.data.length > 0) {
 		for (; j < response.data.length; ++j) {
 			var resp = response.data[j];
-			if (j == Math.floor(.5 * multipleCount))
+			if (j == Math.floor(0.5 * multipleCount))
 				col = "#col2";
 			$(col).append(formatPaste(resp, true));
 		}
@@ -153,13 +153,16 @@ function completeMultiple(response) {
 
 /* channel/paste creation/deletion functions */
 
-function createPaste(text) {
+function createPaste(description, text) {
 	var message = {
 		text: 'Paste Link is ' + pasteSite + 'm/{message_id}',
 		annotations: [{
-						  type: 'net.paste-app.clip',
-						  value: { content: text }
-					  }]
+			type: 'net.paste-app.clip',
+			value: {
+				description: description,
+				content: text
+			}
+		}]
 	};
 	var promise = $.appnet.message.create(pasteChannel.id, message, annotationArgs);
 	promise.then(completePaste, function (response) {failAlert('Failed to create paste.');});
@@ -169,6 +172,7 @@ function completePaste(response) {
 	pushHistory(pasteSite + 'm/' + response.data.id );
 	completeSingle(response);
 	$('#paste-text').val("");
+	$('#paste-description').val("");
 }
 
 function createPasteChannel(text) {
@@ -186,7 +190,7 @@ function createPasteChannel(text) {
 
 function completeCreateChannel(response) {
 	pasteChannel = response.data;
-	createPaste(this.text);
+	createPaste(this.description, this.text);
 }
 
 function deletePaste(messageId) {
@@ -215,20 +219,20 @@ function clickPaste(event) {
 	event.preventDefault();
 	if ($('#paste-text').val() !== '') {
 		if (pasteChannel) {
-			createPaste($('#paste-text').val());
+			createPaste($('#paste-description').val(), $('#paste-text').val());
 		} else {
-			createPasteChannel($('#paste-text').val());
+			createPasteChannel($('#paste-description').val(), $('#paste-text').val());
 		}
 	}
 	return false;
 }
 
 function clickRepaste() {
-	if ($('#repaste-text').val() !== '') {
+	if ($('#repaste-description').val() !== '' || $('#repaste-text').val() !== '') {
 		if (pasteChannel)
-			createPaste($('#repaste-text').val());
+			createPaste($('#repaste-description').val(), $('#repaste-text').val());
 		else
-			createPasteChannel($('#repaste-text').val());
+			createPasteChannel($('#repaste-description').val(), $('#repaste-text').val());
 	}
 	return false;
 }
@@ -251,7 +255,9 @@ function formatPaste(resp, small) {
 	//Otherwise, we need raw text, user link, etc.
 	var annotations = resp.annotations;
 	var i = 0;
+	var description = "";
 	var paste = "";
+	var url;
 	for (; i < annotations.length; ++i)
 	{
 		if (annotations[i].type === 'net.paste-app.clip') {
@@ -259,8 +265,11 @@ function formatPaste(resp, small) {
 			if (val.content) {
 				paste = val.content;
 			}
+			if (val.description) {
+				description = val.description;
+			}
 			var date = resp.created_at;
-			var url = resp.entities.links[0].url;
+			url = resp.entities.links[0].url;
 		}
 	}
 	var formattedDate = new Date(resp.created_at);
@@ -275,9 +284,11 @@ function formatPaste(resp, small) {
 		formatted += "<em>This paste has been deleted by its owner.</em>";
 	} else {
 
-		formatted += "<div class='byline'>" + formattedDate + " by <a href='" + resp.user.canonical_url + "'>" + byline + "</a></div><pre>";
+		formatted += "<div class='byline'>" + formattedDate + " by <a href='" + resp.user.canonical_url + "'>" + byline + "</a></div>";
+		formatted += "<div class='byline'><span style='font-weight:bold;'>" + description + "</span></div>";
+		formatted += "<pre>";
 		if (!small)
-			formatted += "<code" + ((paste.length < highlightMin) ? " class='no-highlight'"  : "") + ">"; 
+			formatted += "<code" + ((paste.length < highlightMin) ? " class='no-highlight'"  : "") + ">";
 		formatted += escapeHTML(paste) + ((!small) ? "</code>" : "") + "</pre><ul><li></li>";
 
 		if (small) {
@@ -285,11 +296,11 @@ function formatPaste(resp, small) {
 		} else {
 			formatted += "<p><strong>Public link:</strong> <a href='" + shortUrl + "'>" + shortUrl + "</a><br />";
 			formatted += "<strong>Private link:</strong> <a href='" + url + "'>" + url + "</a></p>";
-			formatted += "<div><strong>Raw:</strong> <textarea id='repaste-text' rows='6' style='width:99%;'>" + paste + "</textarea>";
-				 if (api.accessToken) {
-					 formatted += "<button class='loggedIn' onclick='clickRepaste()'>Repaste</button>";
-					 formatted += ((resp.channel_id == api.channel_id) ? "<button class='loggedIn' onclick='deletePaste(" + resp.id + ")'>Delete Paste</button>" : "");
-				 }
+			formatted += "<div><strong>Raw:</strong><input id='repaste-description' style='width:99%;' value='" + description + "' /> <textarea id='repaste-text' rows='6' style='width:99%;'>" + paste + "</textarea>";
+				if (api.accessToken) {
+					formatted += "<button class='loggedIn' onclick='clickRepaste()'>Repaste</button>";
+					formatted += ((resp.channel_id == api.channel_id) ? "<button class='loggedIn' onclick='deletePaste(" + resp.id + ")'>Delete Paste</button>" : "");
+				}
 			formatted += "<button onclick='clickClose()'>Close Paste</button></div>";
 		}
 	}
@@ -300,7 +311,7 @@ function formatPaste(resp, small) {
 function getShortVars(shorty) {
 	var vars = [];
 	splits = shorty.split("-");
-	if (splits.length > 0) {		
+	if (splits.length > 0) {
 		vars['enc'] = shorty;
 		vars['c'] = parseInt(splits[0], 36);
 		vars['m'] = parseInt(splits[1], 36);
@@ -310,7 +321,7 @@ function getShortVars(shorty) {
 
 function login() {
 	window.location = authUrl;
-};
+}
 
 function logout() {
 	//Erase token and post list.
@@ -325,21 +336,21 @@ function logout() {
 
 	$(".loggedIn").hide();
 	$(".loggedOut").show();
-};
+}
 
 function pushHistory(newLocation) {
-	if (history.pushState) 
-		history.pushState({}, document.title, newLocation);   
+	if (history.pushState)
+		history.pushState({}, document.title, newLocation);
 }
 
 function toggleAbout() {
 	$('.about').toggle();
 	$('html, body').animate({scrollTop: '0px'}, 150);
-	if ( $('#more').html() == "[more]" ) 
-		 $('#more').html("[less]");
+	if ( $('#more').html() == "[more]" )
+		$('#more').html("[less]");
 	else
 		$('#more').html("[more]");
-};
+}
 
 function viewPaste(shorty) {
 	getvars = getShortVars(shorty);
